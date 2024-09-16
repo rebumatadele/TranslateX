@@ -27,18 +27,28 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                 element.offsetHeight > 0 &&
                 element.offsetWidth > 0 &&
                 element.textContent.trim().length > 0 && // Only non-empty text
-                !element.textContent.includes('--') // Exclude CSS variables
+                !element.textContent.includes('--') &&  // Exclude CSS variables
+                !isNonTextElement(element)              // Exclude icons, images, and invalid elements
             );
         }
 
-        // Utility function to filter valid text nodes (exclude style/script/meta)
+        // Function to check if an element is a non-textual element (icons, images, etc.)
+        function isNonTextElement(element) {
+            const tagName = element.tagName.toLowerCase();
+            const excludedTags = ['img', 'svg', 'i', 'picture']; // Common icon/image elements
+            return excludedTags.includes(tagName);
+        }
+
+        // Refine valid elements check further
         function isValidElement(element) {
             const tagName = element.tagName.toLowerCase();
             const excludedTags = ['style', 'script', 'meta', 'link'];
             return !excludedTags.includes(tagName) && isVisible(element);
         }
 
+
         // Function to handle sending texts for translation in batch (max 100 at a time)
+        // Update the processTranslationQueue function to handle already processed texts properly
         async function processTranslationQueue() {
             if (isTranslating || translationQueue.length === 0) {
                 return; // Exit if translation is already in progress or if the queue is empty
@@ -49,7 +59,7 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
             // Collect text nodes and corresponding text content
             const { textChunks, nodes } = collectTextNodesInOrder();
 
-            console.log("Text chunks to be sent", textChunks);
+            console.log("Text chunks to be sent ----------> ", textChunks);
 
             // Send the collected texts for translation
             try {
@@ -67,7 +77,7 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                     );
                 });
 
-                console.log("The Response", response);
+                console.log("The Response Got from background ------>", response);
 
                 // Check and update the text if translation was successful
                 if (response && response.translatedTexts && Array.isArray(response.translatedTexts) && response.translatedTexts.length > 0) {
@@ -82,7 +92,8 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                 console.error("Translation failed:", error);
             }
 
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Delay between requests
+            // Delay between requests
+            await new Promise(resolve => setTimeout(resolve, 2000)); 
             isTranslating = false; // Reset the flag when translation is done
 
             // If more elements remain in the queue, continue processing
@@ -91,43 +102,58 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
             }
         }
 
-        // Recursive function to collect text from the parent and its nested children
+        // Function to correctly handle processed elements
         function collectTextNodesInOrder() {
             const textChunks = [];
             const nodes = [];
             const seenTextNodes = new Set(); // Track already processed text nodes
 
-            // Recursive helper to traverse through the DOM tree
             function traverseNodes(node) {
                 node.childNodes.forEach(child => {
                     if (child.nodeType === Node.TEXT_NODE) {
-                        // Collect text from text nodes (only non-empty trimmed text)
                         const trimmedText = child.textContent.trim();
-                        if (trimmedText && !/^\d+$/.test(trimmedText) && !seenTextNodes.has(child)) { // Exclude pure numeric values
+                        
+                        if (isMeaningfulText(trimmedText) && !seenTextNodes.has(child)) { 
                             textChunks.push(trimmedText);
                             nodes.push({ type: 'text', node: child });
                             seenTextNodes.add(child); // Mark text node as seen
                         }
                     } else if (child.nodeType === Node.ELEMENT_NODE) {
-                        // Always collect the element, but still recurse its children
                         nodes.push({ type: 'element', node: child });
-                        traverseNodes(child);  // Recurse through nested elements
+                        traverseNodes(child); // Recurse through nested elements
                     }
                 });
             }
 
-            // Start traversal from the root elements in the queue
             translationQueue.forEach(element => traverseNodes(element));
 
             // After processing, move elements to processedElementsSet
             translationQueue.forEach(element => {
                 processedElementsSet.add(element);
-                queuedElementsSet.delete(element);  // Ensure they're no longer in the queued set
+                queuedElementsSet.delete(element); // Ensure they're no longer in the queued set
             });
             translationQueue = []; // Clear the queue
 
             return { textChunks, nodes };
         }
+
+
+        // New function to check if text is meaningful (not JSON-like or punctuation)
+        function isMeaningfulText(text) {
+            const scriptPattern = /window\.(performance|console)\./;
+            const isPunctuationOnly = /^[.,;:!?(){}[\]]+$/.test(text.trim()); // Exclude punctuation-only text
+            const isJSONLike = /[\{\[][^{}]*[\}\]]/.test(text.trim()); // Exclude JSON-like objects or arrays
+            const isKeyValueLike = /["']?[\w-]+["']?:\s*[\w"-]+/.test(text.trim()); // Exclude key-value pairs like "key": "value"
+            const isConfigLike = /(true|false|\d+|null|undefined)/.test(text.trim()); // Exclude boolean/numeric settings
+            const isEmptyOrWhitespace = text.trim().length === 0; // Exclude empty or whitespace-only text
+            const isScriptRelated = scriptPattern.test(text.trim());
+            // Return true only if it's not JSON-like, config-like, or just punctuation
+            if (isScriptRelated) {
+                console.log(`Filtered out: ${text}`);
+            }
+            return !isPunctuationOnly && !isJSONLike && !isKeyValueLike && !isConfigLike && !isEmptyOrWhitespace && !isScriptRelated;
+        }
+
 
         // Function to reinsert translated text into the same structure
         function reinsertTranslatedText(nodes, translatedTexts) {
@@ -163,8 +189,6 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                 if (entry.isIntersecting && !queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
                     // Add element to the queue only if it hasn't been added before
                     translationQueue.push(element);
-                    console.log(`Queued element for translation: ${element.textContent}`);
-
                     // Only add to the set after it's successfully added to the queue
                     queuedElementsSet.add(element);
 

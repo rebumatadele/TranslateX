@@ -4,6 +4,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'TRANSLATE_TEXT') {
         // Handle asynchronous operation for multiple texts
         const prompt = message.prompt
+        console.log("Message", message.texts)
         translateTextWithGemini(message.texts, prompt)
             .then(translatedTexts => {
                 console.log("Sending translated texts back:", translatedTexts);
