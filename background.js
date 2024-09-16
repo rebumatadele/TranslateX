@@ -28,17 +28,15 @@ async function translateTextWithGemini(texts, prompt) {
     const DELAY_MS = 0; // Delay between each request in milliseconds
     const results = [];
     const message = `${prompt} 
-    Instructions:
-    1.  Remove any markup from the response
-    2.  Respond only with the translated term
-    3.  Separate each translation with an asterisk character
-    4.  If the message Raises a Safety issue, return translation of the safe version of the message
-    `
+    Instructions: 1.  Remove any markup from the response 2.  Respond only with the translated term 3.  Separate each translation with an asterisk character 4.  If the message Raises a Safety issue, return translation of the safe version of the message`
     // Prepare the structured request with multiple texts in a single parts array
-    const parts = texts.map(text => ({
-        text: `${message} The text i want you to translate: --> ${text}`
+    const parts = texts.map(t => ({
+        text: `${message} 
+        The text i want you to translate: --> ${t}
+        `
     }));
 
+    console.log("Parts ", parts)
     const requestBody = {
         contents: [
             {
@@ -67,14 +65,13 @@ async function translateTextWithGemini(texts, prompt) {
         }
 
         const data = await response.json();
+        console.log("Data Testing: ", data)
 
-        // Check for the expected response structure and collect results
-        
         if (data.candidates && data.candidates.length > 0) {
-            console.log("test test", data)
             let translatedText
             if(data.candidates[0]?.content === undefined){
-                translatedText = `Content Generation stopped due to: ${data.candidates[0]?.finishReason}`
+                translatedText = texts
+                alert(`Content Translation stopped due to: ${data.candidates[0]?.finishReason}`)
             }
             else{
                 translatedText = data.candidates[0]?.content?.parts[0]?.text;
