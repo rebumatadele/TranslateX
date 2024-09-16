@@ -1,0 +1,45 @@
+{
+    "manifest_version": 3,
+    "name": "Translate Websites Instantly",
+    "description": "Runs a script on www.yahoo.com automatically when user installs the extension",
+    "version": "1.0",
+    "icons": {
+      "16": "images/translate.png",
+      "32": "images/translate.png",
+      "48": "images/translate.png",
+      "128": "images/translate.png"
+    },
+    "action": {
+        "default_icon": {
+        "16": "images/translate.png",
+        "32": "images/translate.png",
+        "48": "images/translate.png",
+        "128": "images/translate.png"
+        },
+        "default_popup": "index.html"
+    },
+    "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    
+    "permissions": [
+      "webNavigation",
+      "activeTab",
+      "scripting",
+      "storage"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"]
+      }
+    ],
+    "host_permissions": [
+    "https://www.yahoo.com/*"
+    ]
+
+}
