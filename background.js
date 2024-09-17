@@ -7,11 +7,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const prompt = message.prompt;
         console.log("Message", message.texts);
 
-        // Split texts into chunks of 100 items each
-        const chunkSize = 50;
+        // Split texts into chunks with a max of 30,000 characters per chunk
+        const maxChars = 3000;
         const chunks = [];
-        for (let i = 0; i < message.texts.length; i += chunkSize) {
-            chunks.push(message.texts.slice(i, i + chunkSize));
+        let currentChunk = [];
+        let currentChunkLength = 0;
+
+        for (const text of message.texts) {
+            const textLength = text.length;
+
+            // If adding this text exceeds the max character limit, push the current chunk and start a new one
+            if (currentChunkLength + textLength > maxChars) {
+                chunks.push(currentChunk);
+                currentChunk = [];
+                currentChunkLength = 0;
+            }
+
+            // Add the text to the current chunk and update the character count
+            currentChunk.push(text);
+            currentChunkLength += textLength;
+        }
+
+        // Push the final chunk if it contains any remaining texts
+        if (currentChunk.length > 0) {
+            chunks.push(currentChunk);
         }
 
         // Process chunks sequentially and combine results
@@ -93,20 +112,25 @@ async function translateTextWithGemini(texts, prompt) {
 
     const DELAY_MS = 0; // Delay between each request in milliseconds
     const results = [];
-    const message = `${prompt} Instructions: 1. I will be providing a json format text for translation in {id: number, value: the text i want you to translate} structure  2. Do not alter the provided IDs 3. respond strictly in a JSON format with exactly {id: number, value: translated_string} structure 4. don't use any newline in the response. 5. Remove any markup from the response. 6. Respond only with the translation. 7. If the message Raises a Safety issue, return translation of the safe version of the message. 8. if you are provided by a special characters, don't attempt to translate it, just return the character`;
+    const message = `${prompt} Instructions: 1. I will be providing a json format text for translation in {id: number, value: the text i want you to translate} structure  2. Do not alter the provided IDs 3. respond strictly in a list of JSON format with exactly [{id: number, value: translated_string}, {id: number, value: translated_string}] structure 4. don't use any newline in the response. 5. Remove any markup from the response. 6. Respond only with the translated list of key value pairs. 7. If the message Raises a Safety issue, return translation of the safe version of the message. 8. if you are provided by a special characters, don't attempt to translate it, just return the character 9. 
+     `;
 
-    const parts = texts.map((text, index) => ({
-        text: `${message} only respond with translation of { id: ${index}, ${text} }`
-    }));
+    const p = texts.map((text, index) => (`{ id: ${index}, value: ${text} }`));
 
-    console.log("Parts with IDs:", parts);
+    console.log("Parts with IDs:", p);
 
     const requestBody = {
         contents: [
             {
-                parts: parts, // Combine all the texts into a single parts array
+                parts: [
+                    {text: "You are helpful translator "}, 
+                    {text: message}, 
+                    ...p.map(text => ({ text }))  // Spread the array into individual entries
+                ], // Combine all the texts into a single parts array
             }
-        ]
+        ],
+        generationConfig: { response_mime_type: "application/json" },
+
     };
 
     try {
@@ -143,11 +167,17 @@ async function translateTextWithGemini(texts, prompt) {
                     console.log("Content Before Parsing", translatedText);
                     
                     // Safely check the format of translatedText before parsing
-                    if (translatedText.trim().startsWith('{') && translatedText.trim().endsWith('}')) {
-                        parsedData = JSON.parse('[' + translatedText + ']');
+                    if (translatedText.trim().startsWith('[') && translatedText.trim().endsWith(']')) {
+                        try {
+                            parsedData = JSON.parse(translatedText);
+                        } catch (error) {
+                            console.error(`Error parsing JSON: ${error.message}`);
+                            throw new Error('Failed to parse translated text');
+                        }
                     } else {
                         throw new Error("Invalid JSON format in the response.");
                     }
+                    
 
                     console.log("Parsed Response", parsedData);
 

@@ -61,17 +61,42 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
         // Function to handle sending texts for translation in batches of 200
         async function processTranslationQueue() {
             if (isTranslating || translationQueue.length === 0) return;
-
+        
             isTranslating = true;
-
+        
             const { textChunks, nodes } = collectTextNodesInOrder();
-
-            // Break textChunks into batches of 200
-            const batchSize = 100;
-            for (let i = 0; i < textChunks.length; i += batchSize) {
-                const textBatch = textChunks.slice(i, i + batchSize);
-                const nodesBatch = nodes.slice(i, i + batchSize);
-                console.log("About to send", textBatch)
+        
+            let currentBatch = [];
+            let currentBatchLength = 0;
+            const maxBatchLength = 3000; // Max 3000 characters per batch
+            const batches = [];
+            const nodeBatches = [];
+        
+            for (let i = 0; i < textChunks.length; i++) {
+                const chunkLength = textChunks[i].length;
+                
+                if (currentBatchLength + chunkLength <= maxBatchLength) {
+                    currentBatch.push(textChunks[i]);
+                    currentBatchLength += chunkLength;
+                } else {
+                    batches.push(currentBatch);
+                    nodeBatches.push(nodes.slice(i - currentBatch.length, i));
+                    currentBatch = [textChunks[i]];
+                    currentBatchLength = chunkLength;
+                }
+            }
+        
+            if (currentBatch.length > 0) {
+                batches.push(currentBatch);
+                nodeBatches.push(nodes.slice(nodes.length - currentBatch.length, nodes.length));
+            }
+        
+            // Now send each batch with max 3000 characters
+            for (let i = 0; i < batches.length; i++) {
+                const textBatch = batches[i];
+                const nodesBatch = nodeBatches[i];
+                console.log("About to send", textBatch.join(' ').length, "characters");
+        
                 try {
                     const response = await new Promise((resolve, reject) => {
                         chrome.runtime.sendMessage(
@@ -86,28 +111,31 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                             }
                         );
                     });
-
+        
                     if (response && response.translatedTexts) {
                         const translatedTexts = response.translatedTexts.map(t => t.translatedText);
-                        reinsertTranslatedText(nodesBatch, translatedTexts); // Only reinsert the translated batch
+                        reinsertTranslatedText(nodesBatch, translatedTexts);
                     }
-
+        
                 } catch (error) {
                     console.error("Translation failed:", error);
                 }
-
-                // Wait for 2 seconds before sending the next batch
+        
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
-
+        
             isTranslating = false;
-
-            // If there are still elements left in the queue, process the next batch
+        
             if (translationQueue.length > 0) {
                 processTranslationQueue();
             }
         }
         
+        
+        // Function to sanitize input by removing control characters
+        function sanitizeInput(text) {
+            return text.replace(/[\x00-\x1F\x7F]/g, ''); // Removes non-printable characters
+        }
 
         // Function to collect text nodes for translation, avoiding duplicates
         function collectTextNodesInOrder() {
@@ -118,7 +146,9 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
             function traverseNodes(node) {
                 node.childNodes.forEach(child => {
                     if (child.nodeType === Node.TEXT_NODE) {
-                        const trimmedText = child.textContent.trim();
+                        let trimmedText = child.textContent.trim();
+                        trimmedText = sanitizeInput(trimmedText); // Sanitize the text here
+
                         if (isMeaningfulText(trimmedText) && !seenTextNodes.has(child) && !processedElementsSet.has(child)) {
                             textChunks.push(trimmedText);
                             nodes.push({ type: 'text', node: child });
