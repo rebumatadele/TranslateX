@@ -58,6 +58,7 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
             return nonMeaningfulPatterns.some(pattern => pattern.test(text.trim()));
         }
         // Function to handle sending texts for translation in batch (max 100 at a time)
+        // Function to handle sending texts for translation in batches of 200
         async function processTranslationQueue() {
             if (isTranslating || translationQueue.length === 0) return;
 
@@ -65,37 +66,48 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
 
             const { textChunks, nodes } = collectTextNodesInOrder();
 
-            try {
-                const response = await new Promise((resolve, reject) => {
-                    chrome.runtime.sendMessage(
-                        { type: 'TRANSLATE_TEXT', texts: textChunks, prompt: prompt },
-                        (response) => {
-                            if (chrome.runtime.lastError) {
-                                console.error("Error:", chrome.runtime.lastError.message);
-                                reject(chrome.runtime.lastError.message);
-                            } else {
-                                resolve(response);
+            // Break textChunks into batches of 200
+            const batchSize = 100;
+            for (let i = 0; i < textChunks.length; i += batchSize) {
+                const textBatch = textChunks.slice(i, i + batchSize);
+                const nodesBatch = nodes.slice(i, i + batchSize);
+                console.log("About to send", textBatch)
+                try {
+                    const response = await new Promise((resolve, reject) => {
+                        chrome.runtime.sendMessage(
+                            { type: 'TRANSLATE_TEXT', texts: textBatch, prompt: prompt },
+                            (response) => {
+                                if (chrome.runtime.lastError) {
+                                    console.error("Error:", chrome.runtime.lastError.message);
+                                    reject(chrome.runtime.lastError.message);
+                                } else {
+                                    resolve(response);
+                                }
                             }
-                        }
-                    );
-                });
+                        );
+                    });
 
-                if (response && response.translatedTexts) {
-                    const translatedTexts = response.translatedTexts.map(t => t.translatedText);
-                    reinsertTranslatedText(nodes, translatedTexts);
+                    if (response && response.translatedTexts) {
+                        const translatedTexts = response.translatedTexts.map(t => t.translatedText);
+                        reinsertTranslatedText(nodesBatch, translatedTexts); // Only reinsert the translated batch
+                    }
+
+                } catch (error) {
+                    console.error("Translation failed:", error);
                 }
 
-            } catch (error) {
-                console.error("Translation failed:", error);
+                // Wait for 2 seconds before sending the next batch
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
-            await new Promise(resolve => setTimeout(resolve, 2000));
             isTranslating = false;
 
+            // If there are still elements left in the queue, process the next batch
             if (translationQueue.length > 0) {
                 processTranslationQueue();
             }
         }
+        
 
         // Function to collect text nodes for translation, avoiding duplicates
         function collectTextNodesInOrder() {
@@ -131,15 +143,19 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
         // Updated function to check if the text is meaningful
         function isMeaningfulText(text) {
             const scriptPattern = /window\.(performance|console)\./;
-            const isPunctuationOnly = /^[.,;:!?(){}[\]]+$/.test(text.trim());
+            const isPunctuationOnly = /^[-.,;:!?(){}[\]]+$/.test(text.trim());
             const isJSONLike = /^[{\[].*[\]}]$/.test(text.trim());
             const isKeyValueLike = /^["']?[\w-]+["']?:\s*["'[\w-]+/.test(text.trim());
             const isConfigLike = /^(true|false|\d+|null|undefined)$/.test(text.trim());
             const isEmptyOrWhitespace = text.trim().length === 0;
             const isScriptRelated = scriptPattern.test(text.trim());
             const isNumbersOnly = /^[\d\s.,;:!?(){}[\]]+$/.test(text.trim()); // Exclude numbers with punctuations
+            const isWeatherRelated = /^[\d\s.,;:!?()°CF]+$/.test(text.trim()); // Matches texts with numbers, degree symbols, C/F for weather
+            const isCSSLike = /\.?\w[\w-]*\s*{[^}]*}/.test(text.trim()); // Matches CSS-like text patterns
+            const isHTMLTag = /<[^>]*>/.test(text.trim()); // Matches HTML tags like <img>, <div>, etc.
+            const isComplexScript = /\b(RLQ|mw\.config|limitreport|cputime|walltime|ppvisitednodes|postexpandincludesize|templateargumentsize|expansiondepth|expensivefunctioncount|unstrip-depth|unstrip-size|entityaccesscount|timingprofile)\b/.test(text.trim()); // Matches complex script-related terms
 
-            return !isPunctuationOnly && !isJSONLike && !isKeyValueLike && !isConfigLike && !isEmptyOrWhitespace && !isScriptRelated && !isNumbersOnly;
+            return !isComplexScript && !isHTMLTag && !isCSSLike && !isWeatherRelated && !isPunctuationOnly && !isJSONLike && !isKeyValueLike && !isConfigLike && !isEmptyOrWhitespace && !isScriptRelated && !isNumbersOnly;
         }
 
         // Function to reinsert translated text using Range to preserve structure
@@ -171,11 +187,12 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                     entries.forEach(entry => {
                         const element = entry.target;
                         if (entry.isIntersecting && !queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
-                            translationQueue.push(element);
+                            translationQueue.unshift(element); // Add element to the beginning of the queue for LIFO
                             queuedElementsSet.add(element);
                             startQueueProcessing();
                         }
                     });
+                    
                 }, observerOptions);
         
                 document.querySelectorAll('*').forEach(element => observer.observe(element));

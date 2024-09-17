@@ -1,14 +1,23 @@
+const translationCache = new Map();  // A cache to store already translated texts
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Received message in background:", message);
 
     if (message.type === 'TRANSLATE_TEXT') {
-        // Handle asynchronous operation for multiple texts
-        const prompt = message.prompt
-        console.log("Message", message.texts)
-        translateTextWithGemini(message.texts, prompt)
+        const prompt = message.prompt;
+        console.log("Message", message.texts);
+
+        // Split texts into chunks of 100 items each
+        const chunkSize = 50;
+        const chunks = [];
+        for (let i = 0; i < message.texts.length; i += chunkSize) {
+            chunks.push(message.texts.slice(i, i + chunkSize));
+        }
+
+        // Process chunks sequentially and combine results
+        processChunksSequentially(chunks, prompt)
             .then(translatedTexts => {
                 console.log("Sending translated texts back:", translatedTexts);
-                // Send back the structured response
                 sendResponse({ translatedTexts });
             })
             .catch(error => {
@@ -21,22 +30,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
+async function processChunksSequentially(chunks, prompt) {
+    const allResults = [];
+
+    for (const chunk of chunks) {
+        const untranslatedChunk = chunk.filter(text => !translationCache.has(text));
+
+        // If there are texts to translate
+        if (untranslatedChunk.length > 0) {
+            try {
+                const result = await retryWithBackoff(() => translateTextWithGemini(untranslatedChunk, prompt));
+
+                // Cache the translated results
+                result.forEach(({ originalText, translatedText }) => {
+                    translationCache.set(originalText, translatedText);
+                });
+
+            } catch (error) {
+                console.error("Translation failed for chunk:", error);
+
+                // On failure, cache the original texts (i.e., untranslated texts remain in their positions)
+                untranslatedChunk.forEach(text => {
+                    translationCache.set(text, text);  // Fallback to original text
+                });
+            }
+        }
+
+        // Collect both cached and newly translated texts in their correct positions
+        chunk.forEach(text => {
+            const translatedText = translationCache.get(text);
+            allResults.push({
+                originalText: text,
+                translatedText: translatedText || text  // Fallback to original if translation fails
+            });
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 1000));  // 1 second delay between chunks
+    }
+
+    return allResults;
+}
+
+async function retryWithBackoff(func, maxRetries = 5) {
+    let delay = 1000; // Start with 1-second delay
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await func();
+        } catch (error) {
+            if (attempt === maxRetries || error.message !== 'Translation failed') {
+                throw error;
+            }
+            console.log(`Retry attempt ${attempt} failed. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2; // Exponential backoff
+        }
+    }
+}
+// translateTextWithGemini function remains unchanged
 async function translateTextWithGemini(texts, prompt) {
     const apiKey = 'AIzaSyARFySyhjCOD4VLh0r6TB_EOy1CTTk7TaA';  // Replace with your actual API key
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const DELAY_MS = 0; // Delay between each request in milliseconds
     const results = [];
-    const message = `${prompt} 
-    Instructions: 1.  Remove any markup from the response 2.  Respond only with the translated term 3.  Separate each translation with an asterisk character 4.  If the message Raises a Safety issue, return translation of the safe version of the message`
-    // Prepare the structured request with multiple texts in a single parts array
-    const parts = texts.map(t => ({
-        text: `${message} 
-        The text i want you to translate: --> ${t}
-        `
+    const message = `${prompt} Instructions: 1. I will be providing a json format text for translation in {id: number, value: the text i want you to translate} structure  2. Do not alter the provided IDs 3. respond strictly in a JSON format with exactly {id: number, value: translated_string} structure 4. don't use any newline in the response. 5. Remove any markup from the response. 6. Respond only with the translation. 7. If the message Raises a Safety issue, return translation of the safe version of the message. 8. if you are provided by a special characters, don't attempt to translate it, just return the character`;
+
+    const parts = texts.map((text, index) => ({
+        text: `${message} only respond with translation of { id: ${index}, ${text} }`
     }));
 
-    console.log("Parts ", parts)
+    console.log("Parts with IDs:", parts);
+
     const requestBody = {
         contents: [
             {
@@ -65,34 +129,47 @@ async function translateTextWithGemini(texts, prompt) {
         }
 
         const data = await response.json();
-        console.log("Data Testing: ", data)
+        let parsedData = [];
 
         if (data.candidates && data.candidates.length > 0) {
-            let translatedText
-            if(data.candidates[0]?.content === undefined){
-                translatedText = texts
-                alert(`Content Translation stopped due to: ${data.candidates[0]?.finishReason}`)
-            }
-            else{
-                translatedText = data.candidates[0]?.content?.parts[0]?.text;
-            }
+            const translatedText = data.candidates[0]?.content?.parts[0]?.text;
 
-            // Split the translated text by line (assuming each response is separated by a line)
-            const translatedParts = translatedText.split('*').filter(part => part.trim() !== '');
+            if (translatedText === undefined) {
+                console.log(`Content Translation stopped due to: ${data.candidates[0]?.finishReason}`);
+                results.push(...texts.map(text => ({ originalText: text, translatedText: text })));
+            } else {
+                try {
+                    // Try parsing the translated text
+                    console.log("Content Before Parsing", translatedText);
+                    
+                    // Safely check the format of translatedText before parsing
+                    if (translatedText.trim().startsWith('{') && translatedText.trim().endsWith('}')) {
+                        parsedData = JSON.parse('[' + translatedText + ']');
+                    } else {
+                        throw new Error("Invalid JSON format in the response.");
+                    }
 
-            // Match the original texts with their translations
-            texts.forEach((originalText, index) => {
-                results.push({
-                    originalText,
-                    translatedText: translatedParts[index] || originalText
-                });
-            });
+                    console.log("Parsed Response", parsedData);
+
+                    // Match the original texts with their translations
+                    texts.forEach((originalText, index) => {
+                        const parsedItem = parsedData.find(item => item.id === index);
+                        results.push({
+                            originalText,
+                            translatedText: parsedItem ? parsedItem.value : originalText
+                        });
+                    });
+                } catch (error) {
+                    console.error(`Error parsing JSON: ${error.message}`);
+                    throw new Error('Failed to parse translated text');
+                }
+            }
         } else {
             throw new Error('Unexpected response format');
         }
 
     } catch (error) {
-        console.error("Error during translation:", error);
+        console.error("Error during translation:", error.message);
         throw new Error('Translation failed');
     }
 
