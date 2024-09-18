@@ -124,6 +124,7 @@ async function translateTextWithGemini(texts, prompt) {
             {
                 parts: [
                     {text: "You are helpful translator "}, 
+                    {text: "You will translate to "},
                     {text: message}, 
                     ...p.map(text => ({ text }))  // Spread the array into individual entries
                 ], // Combine all the texts into a single parts array

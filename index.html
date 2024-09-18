@@ -3,31 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Toggle Example</title>
+  <title>Translate the Web</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-      <h1 class="title">Hello There</h1>
-      <span class="subtitle">Translate your site in here</span>
-
-      <div class="language-input">
-        <label for="language-input" class="label">Enter Prompt for translation in here</label>
-        <textarea id="language-input" class="input" placeholder="Type a language (e.g., English)"></textarea>
-      </div>
-
-      <div class="toggle-container">
-        <span class="label">Activate/Deactivate</span>
-        <input id="toggle" type="checkbox" class="hidden">
-        <label for="toggle" class="toggle-label">
-          <span class="toggle-bg"></span>
-          <span class="toggle-thumb"></span>
-        </label>
-      </div>
-
-      <!-- Add the Refresh Button -->
-      <button id="refresh-button" class="button">Save Preferences</button>
+    <div class="product-header">
+      <img src="images/translate.png" alt="Product Icon"> <!-- Add your icon here -->
+      <span class="product-name">TranslatorEX</span>
+    </div>
+    
+    <h2 class="title">World Wide Web, One Language at a Time</h2>
+    
+    <div class="language-input">
+      <label for="language-input" class="label">Enter Prompt for translation in here</label>
+      <textarea id="language-input" class="input" placeholder="Type a language (e.g., Romaji using Kanji script)"></textarea>
+    </div>
+  
+    <div class="toggle-container">
+      <span class="label">Activate/Deactivate</span>
+      <input id="toggle" type="checkbox" class="hidden">
+      <label for="toggle" class="toggle-label">
+        <span class="toggle-bg"></span>
+        <span class="toggle-thumb"></span>
+      </label>
+    </div>
+  
+    <button id="refresh-button" class="button">Save Preferences</button>
   </div>
+  
 
   <script src="script.js"></script>
 </body>
