@@ -11,7 +11,8 @@ html, body {
   align-items: center;
   justify-content: center;
   font-family: 'Poppins', sans-serif; /* Apply modern font */
-  background-color: #eaeff4; /* Soft, neutral background color */
+  background-color: transparent; /* Soft, neutral background color */
+  border-radius: 26px;
 }
 
 /* Center container and make it look modern */
@@ -20,11 +21,11 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 380px;
+  width: 440px;
   padding: 30px;
   background: white;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-  border-radius: 16px;
+  border-radius: 36px;
   text-align: center;
   box-sizing: border-box;
 }
@@ -82,6 +83,7 @@ html, body {
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
   resize: none;
   transition: border-color 0.3s, box-shadow 0.3s;
+  box-sizing: border-box; /* Includes padding and border in width/height */
 }
 
 .language-input .input:focus {
