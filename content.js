@@ -42,7 +42,7 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
         // Refine valid elements check further
         function isValidElement(element) {
             const tagName = element.tagName.toLowerCase();
-            const excludedTags = ['style', 'script', 'meta', 'link'];
+            const excludedTags = ['style', 'script', 'meta', 'link', 'code', 'pre'];
             return !excludedTags.includes(tagName) && isVisible(element);
         }
 
@@ -149,13 +149,14 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                         let trimmedText = child.textContent.trim();
                         trimmedText = sanitizeInput(trimmedText); // Sanitize the text here
 
-                        if (isMeaningfulText(trimmedText) && !seenTextNodes.has(child) && !processedElementsSet.has(child)) {
+                        if (isValidElement(node) && isMeaningfulText(trimmedText) && !seenTextNodes.has(child) && !processedElementsSet.has(child)) {
                             textChunks.push(trimmedText);
                             nodes.push({ type: 'text', node: child });
                             seenTextNodes.add(child);
                             processedElementsSet.add(child); // Mark this text node as processed
                         }
-                    } else if (child.nodeType === Node.ELEMENT_NODE) {
+                    } else if (child.nodeType === Node.ELEMENT_NODE && isValidElement(child)) {
+                        console.log("Child Nodes: " , child)
                         traverseNodes(child); // Continue traversing through children
                     }
                 });
