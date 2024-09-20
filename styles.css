@@ -184,3 +184,39 @@ html, body {
   outline: none;
   border-color: #005bb5;
 }
+
+
+
+/* Style the restricted websites input container */
+.restricted-websites-input {
+  width: 100%;
+  margin-bottom: 25px;
+}
+
+.restricted-websites-input .label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.restricted-websites-input .input {
+  width: 100%;
+  height: 80px; /* Adjust height to match the content */
+  font-size: 1rem;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f4f7fa;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+  resize: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  box-sizing: border-box;
+}
+
+.restricted-websites-input .input:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}

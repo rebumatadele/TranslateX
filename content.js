@@ -1,10 +1,19 @@
-chrome.storage.local.get(['isEnabled', "language"], (result) => {
+chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (result) => {
     const isEnabled = result.isEnabled ?? true;
     const prompt = result.language;
+    const restricted = result.restrictedWebsites ?? ""
+    const restrictedArray = restricted.split(',').map(site => site.trim());
+
+    const currentUrl = new URL(window.location.href);
+    const isRestricted = restrictedArray.some(site => currentUrl.hostname.includes(site) && site !== "");
     console.log('Loaded state:', isEnabled);
     console.log('Loaded language:', prompt); // Debugging line
 
-    if (isEnabled) {
+    console.log(isRestricted)
+    
+    // console.log("restricted sites", restrictedArray, `  current URL:    ${currentUrl.hostname} `)
+    if (isEnabled && prompt && !isRestricted) {
+        // console.log("HERE")
         const observerOptions = {
             root: null,
             rootMargin: '0px',
@@ -156,7 +165,6 @@ chrome.storage.local.get(['isEnabled', "language"], (result) => {
                             processedElementsSet.add(child); // Mark this text node as processed
                         }
                     } else if (child.nodeType === Node.ELEMENT_NODE && isValidElement(child)) {
-                        console.log("Child Nodes: " , child)
                         traverseNodes(child); // Continue traversing through children
                     }
                 });
