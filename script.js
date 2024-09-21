@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Load the current state and input values
     chrome.storage.local.get(['isEnabled', 'language', 'restrictedWebsites'], (result) => {
-        const isEnabled = result.isEnabled ?? true;
+        const isEnabled = Boolean(result.isEnabled ?? true); // Ensure isEnabled is a boolean
         const language = result.language ?? '';
         const restrictedWebsites = result.restrictedWebsites ?? '';
 
@@ -28,8 +28,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle toggle state
     toggle.addEventListener('change', function() {
         const isEnabled = toggle.checked;
-        chrome.storage.local.set({ isEnabled });
-        chrome.runtime.sendMessage({ action: 'toggle', isEnabled });
+        chrome.storage.local.set({ isEnabled: Boolean(isEnabled) }); // Ensure isEnabled is stored as a boolean
+        chrome.runtime.sendMessage({ action: 'toggle', isEnabled: Boolean(isEnabled) });
 
         if (isEnabled) {
             toggleBg.classList.add('active');

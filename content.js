@@ -1,5 +1,7 @@
+// Global variable to store translations
+let translationMap = new Map();
 chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (result) => {
-    const isEnabled = result.isEnabled ?? true;
+    let isEnabled = Boolean(result.isEnabled ?? true); // Ensure isEnabled is a boolean
     const prompt = result.language;
     const restricted = result.restrictedWebsites ?? ""
     const restrictedArray = restricted.split(',').map(site => site.trim());
@@ -9,7 +11,7 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
     console.log('Loaded state:', isEnabled);
     console.log('Loaded language:', prompt); // Debugging line
 
-    console.log(isRestricted)
+    console.log("Restricted", isRestricted)
     function injectShimmerCSS() {
         const style = document.createElement('style');
         style.textContent = `
@@ -39,11 +41,8 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         document.head.appendChild(style);
     }
     
-    
-    
     // Call this function when your content script runs
     injectShimmerCSS();
-    
     // console.log("restricted sites", restrictedArray, `  current URL:    ${currentUrl.hostname} `)
     if (isEnabled && prompt && !isRestricted) {
         const observerOptions = {
@@ -100,7 +99,7 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         }
         // Function to handle sending texts for translation in batch
         async function processTranslationQueue() {
-            if (isTranslating || translationQueue.length === 0) return;
+            if (isTranslating || translationQueue.length === 0 || !isEnabled) return;
         
             isTranslating = true;
         
@@ -155,7 +154,8 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         
                     if (response && response.translatedTexts) {
                         const translatedTexts = response.translatedTexts.map(t => t.translatedText);
-                        reinsertTranslatedText(nodesBatch, translatedTexts);
+                        const originalTexts = response.translatedTexts.map(t => t.originalText)
+                        reinsertTranslatedText(nodesBatch, translatedTexts, originalTexts);
                     }
         
                 } catch (error) {
@@ -228,17 +228,17 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         }
 
         // Function to reinsert translated text using Range to preserve structure
-        function reinsertTranslatedText(nodes, translatedTexts) {
+        function reinsertTranslatedText(nodes, translatedTexts, originalText) {
             let textIndex = 0;
             nodes.forEach(({ type, node }) => {
                 if (type === 'text' && textIndex < translatedTexts.length) {
+                    translationMap.set(node.parentElement, { original: originalText[textIndex], translated: translatedTexts[textIndex] });
                     const range = document.createRange();
                     range.selectNodeContents(node);
                     const newText = document.createTextNode(translatedTexts[textIndex]);
+                    // Store the original and translated text
                     range.deleteContents();
-                    range.insertNode(newText);
-        
-                    // Remove shimmer from the parent and its children after inserting the translated text
+                    range.insertNode(newText);        
                     removeShimmer(node.parentElement);
                     textIndex++;
                 }
@@ -257,7 +257,6 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                 if (parentElement) {
                     // Add the shimmer class to the parent element
                     parentElement.classList.add("shimmer");
-                    console.log("Shimmer added to the parent Element: ", parentElement);
                 }
             });
         }        
@@ -302,8 +301,50 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', startObserving);
         } else {
-            startObserving();
+            if (isEnabled){
+                startObserving();
+            }
+    
         }
             
     }
+
+    function applyTranslationState() {
+        console.log("Translation Map", translationMap);
+        if (isEnabled) {
+            // Apply translations
+            translationMap.forEach((texts, node) => {
+                if (node.nodeType === Node.ELEMENT_NODE) { // Ensure node is an element
+                    const range = document.createRange();
+                    range.selectNodeContents(node); // Select the node content
+                    range.deleteContents(); // Clear the content
+                    const newText = document.createTextNode(texts.translated);
+                    node.appendChild(newText); // Insert translated text
+                }
+            });
+        } else {
+            // Revert to original text
+            translationMap.forEach((texts, node) => {
+                if (node.nodeType === Node.ELEMENT_NODE) { // Ensure node is an element
+                    const range = document.createRange();
+                    range.selectNodeContents(node); // Select the node content
+                    console.log("Before Deletion: ", range.startContainer.wholeText);
+                    range.deleteContents(); // Clear the content
+                    console.log("After Deletion: ", range.startContainer.wholeText);
+                    const newText = document.createTextNode(texts.original);
+                    node.appendChild(newText); // Insert original text
+                }
+            });
+        }
+    }
+    
+    // Listen for changes to the isEnabled state
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'local' && changes.isEnabled) {
+            isEnabled = Boolean(changes.isEnabled.newValue); // Ensure isEnabled is a boolean
+            applyTranslationState();
+        }
+    });
+    // Initial application of translation state
+    applyTranslationState();
 });
