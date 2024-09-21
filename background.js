@@ -101,7 +101,9 @@ async function retryWithBackoff(func, maxRetries = 5) {
             }
             console.log(`Retry attempt ${attempt} failed. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
-            delay *= 2; // Exponential backoff
+            if (delay < 2) {
+                delay *= 2; // Exponential backoff
+            }
         }
     }
 }
