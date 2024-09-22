@@ -1,11 +1,11 @@
 const translationCache = new Map();  // A cache to store already translated texts
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("Received message in background:", message);
+    // console.log("Received message in background:", message);
 
     if (message.type === 'TRANSLATE_TEXT') {
         const prompt = message.prompt;
-        console.log("Message", message.texts);
+        // console.log("Message", message.texts);
 
         // Split texts into chunks with a max of 30,000 characters per chunk
         const maxChars = 3000;
@@ -36,11 +36,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Process chunks sequentially and combine results
         processChunksSequentially(chunks, prompt)
             .then(translatedTexts => {
-                console.log("Sending translated texts back:", translatedTexts);
+                // console.log("Sending translated texts back:", translatedTexts);
                 sendResponse({ translatedTexts });
             })
             .catch(error => {
-                console.error("Error translating texts:", error);
+                // console.error("Error translating texts:", error);
                 sendResponse({ error: "Translation failed" });
             });
 
@@ -66,7 +66,7 @@ async function processChunksSequentially(chunks, prompt) {
                 });
 
             } catch (error) {
-                console.error("Translation failed for chunk:", error);
+                // console.error("Translation failed for chunk:", error);
 
                 // On failure, cache the original texts (i.e., untranslated texts remain in their positions)
                 untranslatedChunk.forEach(text => {
@@ -99,7 +99,7 @@ async function retryWithBackoff(func, maxRetries = 5) {
             if (attempt === maxRetries || error.message !== 'Translation failed') {
                 throw error;
             }
-            console.log(`Retry attempt ${attempt} failed. Retrying in ${delay}ms...`);
+            // console.log(`Retry attempt ${attempt} failed. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             if (delay < 2) {
                 delay *= 2; // Exponential backoff
@@ -162,12 +162,12 @@ async function translateTextWithGemini(texts, prompt) {
             const translatedText = data.candidates[0]?.content?.parts[0]?.text;
 
             if (translatedText === undefined) {
-                console.log(`Content Translation stopped due to: ${data.candidates[0]?.finishReason}`);
+                // console.log(`Content Translation stopped due to: ${data.candidates[0]?.finishReason}`);
                 results.push(...texts.map(text => ({ originalText: text, translatedText: text })));
             } else {
                 try {
                     // Try parsing the translated text
-                    console.log("Content Before Parsing", translatedText);
+                    // console.log("Content Before Parsing", translatedText);
                     
                     // Safely check the format of translatedText before parsing
                     if (translatedText.trim().startsWith('[') && translatedText.trim().endsWith(']')) {
@@ -182,7 +182,7 @@ async function translateTextWithGemini(texts, prompt) {
                     }
                     
 
-                    console.log("Parsed Response", parsedData);
+                    // console.log("Parsed Response", parsedData);
 
                     // Match the original texts with their translations
                     texts.forEach((originalText, index) => {

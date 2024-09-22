@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Load the current state and input values
     chrome.storage.local.get(['isEnabled', 'language', 'restrictedWebsites'], (result) => {
-        const isEnabled = Boolean(result.isEnabled ?? true); // Ensure isEnabled is a boolean
+        const isEnabled = Boolean(result.isEnabled ?? false); // Ensure isEnabled is a boolean and default to false
         const language = result.language ?? '';
         const restrictedWebsites = result.restrictedWebsites ?? '';
 

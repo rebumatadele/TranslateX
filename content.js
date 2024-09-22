@@ -1,17 +1,19 @@
 // Global variable to store translations
 let translationMap = new Map();
-chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (result) => {
-    let isEnabled = Boolean(result.isEnabled ?? true); // Ensure isEnabled is a boolean
+
+chrome.storage.local.get(['isEnabled', 'language', 'restrictedWebsites'], (result) => {
+    let isEnabled = Boolean(result.isEnabled ?? false); // Default to false if not present
     const prompt = result.language;
-    const restricted = result.restrictedWebsites ?? ""
+    const restricted = result.restrictedWebsites ?? "";
     const restrictedArray = restricted.split(',').map(site => site.trim());
 
     const currentUrl = new URL(window.location.href);
     const isRestricted = restrictedArray.some(site => currentUrl.hostname.includes(site) && site !== "");
-    console.log('Loaded state:', isEnabled);
-    console.log('Loaded language:', prompt); // Debugging line
+    // console.log('Loaded state:', isEnabled);
+    // console.log('Loaded language prompt:', prompt); // Debugging line
 
-    console.log("Restricted", isRestricted)
+    // console.log("Restricted", isRestricted);
+
     function injectShimmerCSS() {
         const style = document.createElement('style');
         style.textContent = `
@@ -24,8 +26,8 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                 );
                 background-size: 200% 100%;
                 animation: shimmer 1.5s infinite;
-                border-radius: 8px; /* Rounded corners */
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Soft shadow for depth */
+                border-radius: 8px;
+                z-index: -1; /* Place the shimmer effect behind the content */
             }
     
             @keyframes shimmer {
@@ -42,7 +44,7 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
     
     // Call this function when your content script runs
     injectShimmerCSS();
-    // console.log("restricted sites", restrictedArray, `  current URL:    ${currentUrl.hostname} `)
+
     if (isEnabled && prompt && !isRestricted) {
         const observerOptions = {
             root: null,
@@ -55,7 +57,6 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         let processedElementsSet = new Set(); // Track processed elements
         let isTranslating = false;
         let queueTimeout;
-        let shimmeredSet = new Set();
 
         // Enhanced function to check if an element is visible and contains meaningful text
         function isVisible(element) {
@@ -97,23 +98,24 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
 
             return nonMeaningfulPatterns.some(pattern => pattern.test(text.trim()));
         }
+
         // Function to handle sending texts for translation in batch
         async function processTranslationQueue() {
-            if (isTranslating || translationQueue.length === 0 || !isEnabled) return;
-        
+            if (!isEnabled || isTranslating || translationQueue.length === 0) return; // Check if isEnabled is true
+
             isTranslating = true;
-        
+
             const { textChunks, nodes } = collectTextNodesInOrder();
-        
+
             let currentBatch = [];
             let currentBatchLength = 0;
             const maxBatchLength = 3000; // Max 3000 characters per batch
             const batches = [];
             const nodeBatches = [];
-        
+
             for (let i = 0; i < textChunks.length; i++) {
                 const chunkLength = textChunks[i].length;
-                
+
                 if (currentBatchLength + chunkLength <= maxBatchLength) {
                     currentBatch.push(textChunks[i]);
                     currentBatchLength += chunkLength;
@@ -124,19 +126,19 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                     currentBatchLength = chunkLength;
                 }
             }
-        
+
             if (currentBatch.length > 0) {
                 batches.push(currentBatch);
                 nodeBatches.push(nodes.slice(nodes.length - currentBatch.length, nodes.length));
             }
-        
+
             // Now send each batch with max 3000 characters
             for (let i = 0; i < batches.length; i++) {
                 const textBatch = batches[i];
                 const nodesBatch = nodeBatches[i];
-                addStyle(nodesBatch)
-                console.log("About to send", textBatch.join(' ').length, "characters");
-        
+                addStyle(nodesBatch);
+                // console.log("About to send", textBatch.join(' ').length, "characters");
+
                 try {
                     const response = await new Promise((resolve, reject) => {
                         chrome.runtime.sendMessage(
@@ -151,29 +153,30 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                             }
                         );
                     });
-        
+
                     if (response && response.translatedTexts) {
                         const translatedTexts = response.translatedTexts.map(t => t.translatedText);
-                        const originalTexts = response.translatedTexts.map(t => t.originalText)
-                        if (isEnabled){
-                            reinsertTranslatedText(nodesBatch, translatedTexts, originalTexts);
-                        }
+                        const originalTexts = response.translatedTexts.map(t => t.originalText);
+                        reinsertTranslatedText(nodesBatch, translatedTexts, originalTexts);
                     }
-        
+
                 } catch (error) {
                     console.error("Translation failed:", error);
                 }
-        
+
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
-        
+
             isTranslating = false;
-        
+
             if (translationQueue.length > 0) {
                 processTranslationQueue();
             }
         }
         
+        
+        
+
         
         // Function to sanitize input by removing control characters
         function sanitizeInput(text) {
@@ -185,31 +188,31 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
             const textChunks = [];
             const nodes = [];
             const seenTextNodes = new Set();
-        
+
             function traverseNodes(node) {
                 node.childNodes.forEach(child => {
                     if (child.nodeType === Node.TEXT_NODE) {
                         let trimmedText = child.textContent.trim();
                         trimmedText = sanitizeInput(trimmedText); // Sanitize the text here
-                        if (isValidElement(node) && isMeaningfulText(trimmedText) && !seenTextNodes.has(child) && !processedElementsSet.has(child)) {
+                        if (isValidElement(node) && isMeaningfulText(trimmedText) && !seenTextNodes.has(child)) {
                             textChunks.push(trimmedText);
                             nodes.push({ type: 'text', node: child });
                             seenTextNodes.add(child);
-                            processedElementsSet.add(child); // Mark this text node as processed
                         }
-                    } else if (child.nodeType === Node.ELEMENT_NODE && isValidElement(child)) {
+                    } else if (child.nodeType === Node.ELEMENT_NODE && isValidElement(child) && !processedElementsSet.has(child)) {
+                        processedElementsSet.add(child); // Mark this node as processed
                         traverseNodes(child); // Continue traversing through children
                     }
                 });
             }
-        
+
             translationQueue.forEach(element => traverseNodes(element));
             translationQueue.forEach(element => {
                 queuedElementsSet.delete(element);
             });
             translationQueue = [];
             return { textChunks, nodes };
-        }        
+        }
 
         // Check if text is meaningful (exclude scripts, configs, etc.)
         function isMeaningfulText(text) {
@@ -234,42 +237,44 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
             let textIndex = 0;
             nodes.forEach(({ type, node }) => {
                 if (type === 'text' && textIndex < translatedTexts.length) {
-                    translationMap.set(node.parentElement, { original: originalText[textIndex], translated: translatedTexts[textIndex] });
+                    if (!translationMap.has(node.parentElement)) {
+                        translationMap.set(node.parentElement, { original: originalText[textIndex], translated: translatedTexts[textIndex] });
+                    }
                     const range = document.createRange();
                     range.selectNodeContents(node);
                     const newText = document.createTextNode(translatedTexts[textIndex]);
                     // Store the original and translated text
                     range.deleteContents();
-                    range.insertNode(newText);        
+                    range.insertNode(newText);
                     removeShimmer(node.parentElement);
                     textIndex++;
                 }
             });
-        }        
+        }
 
         // Start queue processing with a delay
         function startQueueProcessing() {
             if (queueTimeout) clearTimeout(queueTimeout);
             queueTimeout = setTimeout(() => processTranslationQueue(), 1000);
         }
+
         function addStyle(nodesBatch) {
             nodesBatch.forEach(({ node }) => {
                 const parentElement = node.parentElement;
                 // Check if the parent element exists and has classList
-                if (parentElement && !shimmeredSet.has(parentElement)) {
+                if (parentElement) {
                     // Add the shimmer class to the parent element
                     parentElement.classList.add("shimmer");
-                    shimmeredSet.add(parentElement)
                 }
             });
-        }        
-        
+        }
+
         function removeShimmer(element) {
             if (element && element.classList) {
                 element.classList.remove("shimmer");
             }
         }
-        
+
         // IntersectionObserver logic for observing elements in view
         function startObserving() {
             setTimeout(() => {
@@ -277,43 +282,39 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
                         const element = entry.target;
-                        if (entry.isIntersecting && !queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
+                        if (isEnabled && entry.isIntersecting && !queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
                             translationQueue.unshift(element); // Add element to the beginning of the queue for LIFO
                             queuedElementsSet.add(element);
-                            processedElementsSet.add(element)
+                            processedElementsSet.add(element);
                             startQueueProcessing();
                         }
                     });
-                    
+
                 }, observerOptions);
-        
+
                 document.querySelectorAll('*').forEach(element => observer.observe(element));
-        
+
                 // MutationObserver logic
                 const mutationObserver = new MutationObserver(() => {
                     document.querySelectorAll('*').forEach(element => {
-                        if (!queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
+                        if (isEnabled && !queuedElementsSet.has(element) && !processedElementsSet.has(element) && isValidElement(element)) {
                             observer.observe(element);
                         }
                     });
                 });
-        
+
                 mutationObserver.observe(document.body, { childList: true, subtree: true });
             }, 3000); // Delay for 3 seconds
         }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', startObserving);
         } else {
-            if (isEnabled){
-                startObserving();
-            }
-    
-        }
+            startObserving();
             
+        }
     }
-
     function applyTranslationState() {
-        console.log("Translation Map", translationMap);
         if (isEnabled) {
             // Apply translations
             translationMap.forEach((texts, node) => {
@@ -331,9 +332,7 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                 if (node.nodeType === Node.ELEMENT_NODE) { // Ensure node is an element
                     const range = document.createRange();
                     range.selectNodeContents(node); // Select the node content
-                    console.log("Before Deletion: ", range.startContainer.wholeText);
                     range.deleteContents(); // Clear the content
-                    console.log("After Deletion: ", range.startContainer.wholeText);
                     const newText = document.createTextNode(texts.original);
                     node.appendChild(newText); // Insert original text
                 }
