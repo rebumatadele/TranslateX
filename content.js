@@ -18,11 +18,10 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
             .shimmer {
                 background: linear-gradient(
                     90deg,
-                    rgba(255, 255, 255, 0.1) 25%,
-                    rgba(255, 255, 255, 0.3) 50%,
-                    rgba(255, 255, 255, 0.1) 75%
+                    rgba(0, 0, 0, 0.2) 25%,
+                    rgba(0, 0, 0, 0.4) 50%,
+                    rgba(0, 0, 0, 0.2) 75%
                 );
-                background-color: #e0e0e0; /* Even lighter grey */
                 background-size: 200% 100%;
                 animation: shimmer 1.5s infinite;
                 border-radius: 8px; /* Rounded corners */
@@ -56,6 +55,7 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
         let processedElementsSet = new Set(); // Track processed elements
         let isTranslating = false;
         let queueTimeout;
+        let shimmeredSet = new Set();
 
         // Enhanced function to check if an element is visible and contains meaningful text
         function isVisible(element) {
@@ -155,7 +155,9 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
                     if (response && response.translatedTexts) {
                         const translatedTexts = response.translatedTexts.map(t => t.translatedText);
                         const originalTexts = response.translatedTexts.map(t => t.originalText)
-                        reinsertTranslatedText(nodesBatch, translatedTexts, originalTexts);
+                        if (isEnabled){
+                            reinsertTranslatedText(nodesBatch, translatedTexts, originalTexts);
+                        }
                     }
         
                 } catch (error) {
@@ -254,9 +256,10 @@ chrome.storage.local.get(['isEnabled', "language", "restrictedWebsites"], (resul
             nodesBatch.forEach(({ node }) => {
                 const parentElement = node.parentElement;
                 // Check if the parent element exists and has classList
-                if (parentElement) {
+                if (parentElement && !shimmeredSet.has(parentElement)) {
                     // Add the shimmer class to the parent element
                     parentElement.classList.add("shimmer");
+                    shimmeredSet.add(parentElement)
                 }
             });
         }        
