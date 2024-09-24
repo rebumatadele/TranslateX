@@ -109,7 +109,7 @@ async function retryWithBackoff(func, maxRetries = 5) {
 }
 // translateTextWithGemini function remains unchanged
 async function translateTextWithGemini(texts, prompt) {
-    const apiKey = 'AIzaSyARFySyhjCOD4VLh0r6TB_EOy1CTTk7TaA';  // Replace with your actual API key
+    const apiKey = '';  // Replace with your actual API key
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const DELAY_MS = 0; // Delay between each request in milliseconds
