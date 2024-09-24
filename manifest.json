@@ -40,6 +40,14 @@
     ],
     "host_permissions": [
     "https://www.yahoo.com/*"
-    ]
-
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "images/TranslateEX.png",
+                "images/translate.png"
+            ],
+            "matches": ["<all_urls>"]
+        }
+      ]
 }
