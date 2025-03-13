@@ -1,6 +1,6 @@
 # 🌍 **Chrome Extension: Translate Entire Webpage**  
 
-🚀 **Translate Entire Webpage** is a **Chrome extension** that enables users to **translate an entire webpage** using a custom script and language preferences. With **prompt-based translation** and a **toggle feature**, users can seamlessly switch between the **original and translated content**.  
+🚀 **TranslateX** is a **Chrome extension** that enables users to **translate an entire webpage** using a custom script and language preferences. With **prompt-based translation** and a **toggle feature**, users can seamlessly switch between the **original and translated content**.  
 
 🔗 **GitHub Repository:** [Translate Entire Webpage Extension](https://github.com/rebumatadele/Chrome-extension-to-translate-entire-webpage-)  
 
